@@ -190,7 +190,7 @@ or a custom visualizer for an existing data type.</p>
 <div class="section" id="introduction">
 <h2>Introduction<a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
 <p>A <code class="docutils literal notranslate"><span class="pre">Visualizer</span></code> is defined by the following interface:</p>
-<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="kr">export</span> <span class="kr">interface</span> <span class="nx">Visualizer</span><span class="o">&lt;</span><span class="nx">T</span> <span class="kr">extends</span> <span class="nx">EventType</span> <span class="o">=</span> <span class="nx">EventType</span><span class="o">&gt;</span> <span class="p">{</span>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span> <span class="kd">interface</span> <span class="nx">Visualizer</span><span class="o">&lt;</span><span class="nx">T</span> <span class="k">extends</span> <span class="nx">EventType</span> <span class="o">=</span> <span class="nx">EventType</span><span class="o">&gt;</span> <span class="p">{</span>
   <span class="c1">// An id, unique amongst visualizers</span>
   <span class="nx">id</span>: <span class="kt">VisualizerId</span><span class="p">;</span>
 
@@ -355,7 +355,7 @@ export const CustomVec2Visualizer = {
 
 <span class="c1">// import { CustomVec2Visualizer } from ...</span>
 
-<span class="kr">export</span> <span class="kr">const</span> <span class="nx">visualizerRegistry</span><span class="o">:</span> <span class="p">{</span> <span class="p">[</span><span class="nx">k</span>: <span class="kt">string</span><span class="p">]</span><span class="o">:</span> <span class="nx">Visualizer</span> <span class="p">}</span> <span class="o">=</span> <span class="p">[</span>
+<span class="k">export</span> <span class="kd">const</span> <span class="nx">visualizerRegistry</span><span class="o">:</span> <span class="p">{</span> <span class="p">[</span><span class="nx">k</span>: <span class="kt">string</span><span class="p">]</span><span class="o">:</span> <span class="nx">Visualizer</span> <span class="p">}</span> <span class="o">=</span> <span class="p">[</span>
   <span class="nx">CustomVec2Visualizer</span><span class="p">,</span>
   <span class="c1">// ...</span>
 </pre></div>

@@ -220,50 +220,8 @@ The files in this layer are meant to be copied into other containers,
 and the images themselves are small compared to the build-time requirements.</p>
 <p>The images are pushed to the dockerhub repository <code class="docutils literal notranslate"><span class="pre">farmng/build-&lt;third</span> <span class="pre">party</span> <span class="pre">name&gt;</span></code>. For example, <code class="docutils literal notranslate"><span class="pre">farmng/build-grpc</span></code> is built from
 <a class="reference external" href="https://github.com/farm-ng/tractor/blob/devel/docker/grpc.Dockerfile">//docker/grpc.Dockerfile</a>.</p>
-<div class="highlight-dockerfile notranslate"><div class="highlight"><pre><span></span><span class="k">ARG</span> <span class="nv">base_image</span><span class="o">=</span>ubuntu:18.04
-<span class="k">FROM</span> <span class="s">$base_image</span>
-<span class="k">RUN</span> apt-get update --fix-missing <span class="o">&amp;&amp;</span> <span class="se">\</span>
-    apt-get install -y --no-install-recommends <span class="se">\</span>
-    autoconf <span class="se">\</span>
-    build-essential <span class="se">\</span>
-    ca-certificates <span class="se">\</span>
-    git <span class="se">\</span>
-    libtool <span class="se">\</span>
-    pkg-config <span class="se">\</span>
-    python3-pip <span class="se">\</span>
-    <span class="o">&amp;&amp;</span> <span class="se">\</span>
-    apt-get clean
-
-<span class="k">RUN</span> pip3 install --upgrade pip <span class="o">&amp;&amp;</span> pip3 install cmake
-<span class="k">RUN</span> git clone --depth<span class="o">=</span><span class="m">1</span> --recurse-submodules -b v1.34.0 https://github.com/grpc/grpc
-
-<span class="k">ARG</span> <span class="nv">PREFIX</span><span class="o">=</span>/farm_ng/env
-<span class="k">ARG</span> <span class="nv">PARALLEL</span><span class="o">=</span><span class="m">1</span>
-<span class="k">RUN</span> <span class="nb">set</span> -ex <span class="o">&amp;&amp;</span> <span class="se">\</span>
-    mkdir -p build-grpc <span class="o">&amp;&amp;</span> <span class="nb">cd</span> build-grpc <span class="o">&amp;&amp;</span> <span class="se">\</span>
-    cmake <span class="se">\</span>
-    -DCMAKE_INSTALL_PREFIX<span class="o">=</span>/install_grpc <span class="se">\</span>
-    -DCMAKE_PREFIX_PATH<span class="o">=</span><span class="nv">$PREFIX</span> <span class="se">\</span>
-    -DCMAKE_BUILD_TYPE<span class="o">=</span>Release <span class="se">\</span>
-    -DBUILD_SHARED_LIBS<span class="o">=</span>ON <span class="se">\</span>
-    ../grpc <span class="o">&amp;&amp;</span> <span class="se">\</span>
-    cmake --build . --parallel <span class="nv">$PARALLEL</span> --target install --config Release
-
-
-<span class="k">FROM</span> <span class="s">scratch</span>
-<span class="k">ARG</span> <span class="nv">PREFIX</span><span class="o">=</span>/farm_ng/env
-<span class="k">COPY</span> --from<span class="o">=</span><span class="m">0</span> /install_grpc <span class="nv">$PREFIX</span>
-</pre></div>
-</div>
 <p>Next, this workflow builds our devel image (<a class="reference external" href="https://github.com/farm-ng/tractor/blob/devel/docker/devel.Dockerfile">//docker/devel.Dockerfile</a>),
 which depends on the third party images described above:</p>
-<div class="highlight-dockerfile notranslate"><div class="highlight"><pre><span></span><span class="k">COPY</span> --from<span class="o">=</span>farmng/build-grpc:edge <span class="nv">$PREFIX</span> <span class="nv">$PREFIX</span>
-<span class="k">COPY</span> --from<span class="o">=</span>farmng/build-opencv:edge <span class="nv">$PREFIX</span> <span class="nv">$PREFIX</span>
-<span class="k">COPY</span> --from<span class="o">=</span>farmng/build-sophus:edge <span class="nv">$PREFIX</span> <span class="nv">$PREFIX</span>
-<span class="k">COPY</span> --from<span class="o">=</span>farmng/build-apriltag:edge <span class="nv">$PREFIX</span> <span class="nv">$PREFIX</span>
-<span class="k">COPY</span> --from<span class="o">=</span>farmng/build-ceres:edge <span class="nv">$PREFIX</span> <span class="nv">$PREFIX</span>
-</pre></div>
-</div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>We support x86 and the jetson platform, and would like to extend this to build for platforms in the near future using:</p>
