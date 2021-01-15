@@ -319,13 +319,11 @@ pull React components, React hooks, utilities, and so on.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>  <span class="c1"># To launch a development server on a machine with the hostname tractor.local</span>
 
   <span class="c1"># In one terminal, run the backend on port 8081</span>
-  <span class="nb">cd</span> <span class="nv">$FARM_NG_ROOT</span> <span class="o">&amp;&amp;</span> . setup.bash
-  <span class="nb">cd</span> modules/frontend/go/webrtc
+  <span class="nb">cd</span> <span class="nv">$FARM_NG_ROOT</span>/modules/frontend/go/webrtc
   <span class="nv">PORT</span><span class="o">=</span><span class="m">8081</span> go run cmd/proxy-server/main.go
 
   <span class="c1"># In another terminal, run webpack-dev-server (in watch mode) on port 8080</span>
-  <span class="nb">cd</span> <span class="nv">$FARM_NG_ROOT</span> <span class="o">&amp;&amp;</span> . setup.bash
-  <span class="nb">cd</span> modules/frontend/frontend
+  <span class="nb">cd</span> <span class="nv">$FARM_NG_ROOT</span>/modules/frontend/frontend
   <span class="nv">BASE_URL</span><span class="o">=</span><span class="s2">&quot;http://tractor.local:8081&quot;</span> yarn dev-start-remote --port <span class="m">8080</span>
 
   <span class="c1"># Wait for the initial webpack build to complete, then</span>

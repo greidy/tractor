@@ -278,7 +278,7 @@ sensor and actuator drivers, planners, loggers, etc.</p>
 <span class="nt">services</span><span class="p">:</span>
   <span class="nt">ipc_logger</span><span class="p">:</span>
     <span class="nt">image</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">farmng/base:latest</span>
-    <span class="nt">entrypoint</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">./env.sh build/modules/core/cpp/farm_ng/ipc_logger</span>
+    <span class="nt">entrypoint</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">build/modules/core/cpp/farm_ng/ipc_logger</span>
     <span class="nt">environment</span><span class="p">:</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">BLOBSTORE_ROOT=/blobstore</span>
     <span class="nt">volumes</span><span class="p">:</span>
@@ -286,7 +286,7 @@ sensor and actuator drivers, planners, loggers, etc.</p>
     <span class="nt">network_mode</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">host</span>
   <span class="nt">programd</span><span class="p">:</span>
     <span class="nt">image</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">farmng/base:latest</span>
-    <span class="nt">entrypoint</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">./env.sh python -m farm_ng.core.programd</span>
+    <span class="nt">entrypoint</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">python -m farm_ng.core.programd</span>
     <span class="nt">environment</span><span class="p">:</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">BLOBSTORE_ROOT=/blobstore</span>
     <span class="nt">volumes</span><span class="p">:</span>

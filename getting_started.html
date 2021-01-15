@@ -335,27 +335,33 @@ sudo pip3 install docker-compose
 </div>
 <div class="section" id="start-the-development-container">
 <h3>Start the development container<a class="headerlink" href="#start-the-development-container" title="Permalink to this headline">¶</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">docker-compose</span></code> can be used to start the development Docker container. It mounts the repository from your host as a volume.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span> docker
-docker-compose -f docker-compose.devel.yml up
+<p><code class="docutils literal notranslate"><span class="pre">docker-compose</span></code> can be used to start the development Docker
+container.  It mounts the repository from your host as a volume.For
+convenience, we’ve wrapped the docker-compose commands in Makefile
+located under <code class="docutils literal notranslate"><span class="pre">$FARM_NG_ROOT/docker/devel</span></code>.</p>
+<p>The following command starts the development docker environment in the background.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>make -C docker/devel upd
 </pre></div>
 </div>
-<p>You should see something similar to:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>$ docker-compose -f docker-compose.devel.yml up
-Creating docker_devel_1 ... done
-Attaching to docker_devel_1
-devel_1  | farm-ng&#39;s devel container is running.  Press Ctrl-C to stop it.
-devel_1  | You can open up a shell inside the container:
-devel_1  |   docker exec -it docker_devel_1 bash
+<p>On the first run, the development environment docker image is built, inheriting the user name, UID and GID of the parent shell.
+You should see something similar to:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>~/code/tractor$ make -C docker/devel upd
+Building workspace
+Successfully built c0861fd269b0
+Successfully tagged devel_workspace:latest
+Creating devel_workspace_1 ... done
+farm-ng&#39;s devel container is running.  Run make down to stop it.
+You can open up a shell inside the container:
+   docker exec -it devel_workspace_1 bash
 </pre></div>
 </div>
-<p>To stop the container, press <code class="docutils literal notranslate"><span class="pre">Ctrl-C</span></code>.</p>
+<p>To stop the container, run <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">-C</span> <span class="pre">docker/devel</span> <span class="pre">down</span></code></p>
 <p>Now the Docker container is up and running.  You can <code class="docutils literal notranslate"><span class="pre">exec</span></code> into it, interactively, and open as many shells as you like with the following command:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docker</span> <span class="n">exec</span> <span class="o">-</span><span class="n">it</span> <span class="n">docker_devel_1</span> <span class="n">bash</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docker</span> <span class="n">exec</span> <span class="o">-</span><span class="n">it</span> <span class="n">devel_workspace_1</span> <span class="n">bash</span>
 </pre></div>
 </div>
 <p>Try the following, on your host machine, to configure the <code class="docutils literal notranslate"><span class="pre">cmake</span></code> build inside the container:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker <span class="nb">exec</span> docker_devel_1 bash -c <span class="s2">&quot;. setup.bash &amp;&amp; mkdir -p build &amp;&amp; cd build &amp;&amp; cmake -DCMAKE_PREFIX_PATH=/farm_ng/env -DBUILD_DOCS=True ..&quot;</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker <span class="nb">exec</span> devel_workspace_1 make cmake
 </pre></div>
 </div>
 <p>You should see something similar to:</p>
@@ -368,27 +374,33 @@ devel_1  |   docker exec -it docker_devel_1 bash
 </div>
 <p>Now that the code is configured, you should see a <code class="docutils literal notranslate"><span class="pre">build/</span></code> directory on the host machine with a <code class="docutils literal notranslate"><span class="pre">Makefile</span></code> and <code class="docutils literal notranslate"><span class="pre">CMakeCache.txt</span></code></p>
 <p>Let’s try building these docs:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docker</span> <span class="n">exec</span> <span class="n">docker_devel_1</span> <span class="o">/</span><span class="n">workspace</span><span class="o">/</span><span class="n">tractor</span><span class="o">/</span><span class="n">env</span><span class="o">.</span><span class="n">sh</span> <span class="n">make</span> <span class="o">-</span><span class="n">C</span> <span class="n">build</span> <span class="n">docs</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docker</span> <span class="n">exec</span> <span class="n">devel_workspace_1</span> <span class="n">make</span> <span class="o">-</span><span class="n">C</span> <span class="n">build</span> <span class="n">docs</span>
 </pre></div>
 </div>
 <p>And run a server to host them:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docker</span> <span class="n">exec</span> <span class="n">docker_devel_1</span> <span class="n">bash</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;cd build/doc/sphinx &amp;&amp; python3 -m http.server 8000&quot;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">docker</span> <span class="n">exec</span> <span class="n">devel_workspace_1</span> <span class="n">bash</span> <span class="o">-</span><span class="n">c</span> <span class="s2">&quot;cd build/doc/sphinx &amp;&amp; python3 -m http.server 8000&quot;</span>
 </pre></div>
 </div>
 <p>Try browsing to <a class="reference external" href="http://localhost:8000/getting_started.html#start-the-development-container">http://localhost:8000/getting_started.html#start-the-development-container</a></p>
-<p>Now take a moment to study the contents of <code class="docutils literal notranslate"><span class="pre">docker/docker-compose.devel.yaml</span></code>:</p>
+<p>Now take a moment to study the contents of <code class="docutils literal notranslate"><span class="pre">docker/devel/docker-compose.yaml</span></code>:</p>
 <div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">version</span><span class="p">:</span> <span class="s">&quot;3.3&quot;</span>
 
 <span class="nt">services</span><span class="p">:</span>
-  <span class="nt">devel</span><span class="p">:</span>
-    <span class="nt">image</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">farmng/devel@sha256:15c31ddbeb3649575de3dfbc4c3360c1b5af04e04fbc275fd7c9de4cde60b89d</span>
-    <span class="nt">command</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">/workspace/tractor/docker/loop_forever.sh</span>
+  <span class="nt">workspace</span><span class="p">:</span>
+    <span class="nt">build</span><span class="p">:</span>
+      <span class="nt">context</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">./</span>
+      <span class="nt">dockerfile</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">user_devel.Dockerfile</span>
+      <span class="nt">args</span><span class="p">:</span>
+        <span class="nt">USERNAME</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${USER}</span>
+        <span class="nt">USER_UID</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${uid}</span>
+        <span class="nt">FARM_NG_DEVEL_IMAGE</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">${FARM_NG_DEVEL_IMAGE}</span>
+    <span class="nt">command</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">/workspace/tractor/docker/devel/loop_forever.sh</span>
     <span class="nt">environment</span><span class="p">:</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">BLOBSTORE_ROOT=/blobstore</span>
     <span class="nt">volumes</span><span class="p">:</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">home:/root</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">../../tractor-data:/blobstore</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">..:/workspace/tractor</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">home:/home/${USER}</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">../../../tractor-data:/blobstore</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">../..:/workspace/tractor</span>
     <span class="nt">working_dir</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">/workspace/tractor</span>
     <span class="nt">network_mode</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">host</span>
 
@@ -398,20 +410,15 @@ devel_1  |   docker exec -it docker_devel_1 bash
 </div>
 <ul class="simple">
 <li><p>The source directory is mounted at <code class="docutils literal notranslate"><span class="pre">/workspace/tractor</span></code>.</p></li>
-<li><p>A named volume is mounted at <code class="docutils literal notranslate"><span class="pre">/root</span></code> – this allows the container to persist bash history and other cached variables.</p></li>
+<li><p>A named volume is mounted at <code class="docutils literal notranslate"><span class="pre">/home/$USERNAME</span></code> – this allows the container to persist bash history and other cached variables.</p></li>
 <li><p>A host directory is mounted as the <code class="docutils literal notranslate"><span class="pre">BLOBSTORE_ROOT</span></code> for <a class="reference internal" href="core_module.html#section-core-blobstore"><span class="std std-ref">persistent storage of application data</span></a>.</p></li>
 </ul>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Currently the Docker container user is <code class="docutils literal notranslate"><span class="pre">root</span></code>.  We want to fix that shortly, so it matches your <code class="docutils literal notranslate"><span class="pre">$UID</span></code> on the host…
-living on the edge here!</p>
-</div>
 </div>
 <div class="section" id="visual-studio-code-setup">
 <h3>Visual Studio Code setup<a class="headerlink" href="#visual-studio-code-setup" title="Permalink to this headline">¶</a></h3>
 <p>Now that you’re comfortable execing into the development container let’s boot up <code class="docutils literal notranslate"><span class="pre">vscode</span></code>.</p>
 <p>Start <code class="docutils literal notranslate"><span class="pre">vscode</span></code> in the normal way and install the extension <code class="docutils literal notranslate"><span class="pre">ms-vscode-remote.remote-containers</span></code>.</p>
-<p>Attach to the container <code class="docutils literal notranslate"><span class="pre">docker_devel_1</span></code> using <strong>Remote-Containers: Attach to Running Container</strong>.</p>
+<p>Attach to the container <code class="docutils literal notranslate"><span class="pre">devel_workspace_1</span></code> using <strong>Remote-Containers: Attach to Running Container</strong>.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>For additional background, see vscode documentation on <a class="reference external" href="https://code.visualstudio.com/docs/remote/attach-container">container-based workflows</a>.</p>
@@ -442,7 +449,6 @@ This is how we develop on remote machines such as robots.</p>
 <h3>Building the code<a class="headerlink" href="#building-the-code" title="Permalink to this headline">¶</a></h3>
 <p>To build our C++ and protobuf generated code, we use <code class="docutils literal notranslate"><span class="pre">cmake</span></code>.  From inside the Docker container (either in the <code class="docutils literal notranslate"><span class="pre">exec</span></code> shell, or a terminal in VS code) you can run the following commands:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span> /workspace/tractor
-. setup.bash
 mkdir -p build
 <span class="nb">cd</span> build
 cmake -DCMAKE_PREFIX_PATH<span class="o">=</span>/farm_ng/env ..
@@ -455,10 +461,10 @@ make -j<span class="k">$(</span>nproc --ignore<span class="o">=</span><span clas
 </div>
 <p>To build our webservices (Typescript and Go) run:</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span> /workspace/tractor
-./env.sh make webservices
+make webservices
 
 <span class="c1"># Run the webservices</span>
-<span class="nv">PORT</span><span class="o">=</span><span class="m">9999</span> ./env.sh build/go/farm_ng_webservices
+<span class="nv">PORT</span><span class="o">=</span><span class="m">9999</span> build/go/farm_ng_webservices
 </pre></div>
 </div>
 <p>Try browsing to <a class="reference external" href="http://localhost:9999/">http://localhost:9999/</a>.</p>
