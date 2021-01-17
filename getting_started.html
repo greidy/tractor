@@ -100,6 +100,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#building-the-code">Building the code</a></li>
 </ul>
 </li>
+<li class="toctree-l2"><a class="reference internal" href="#git-workflow">Git workflow</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#tutorials">Tutorials</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="service_tutorial.html">Writing a Service</a></li>
 <li class="toctree-l3"><a class="reference internal" href="program_tutorial.html">Writing a Program</a></li>
@@ -398,14 +399,11 @@ You can open up a shell inside the container:
     <span class="nt">environment</span><span class="p">:</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">BLOBSTORE_ROOT=/blobstore</span>
     <span class="nt">volumes</span><span class="p">:</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">home:/home/${USER}</span>
-      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">../../../tractor-data:/blobstore</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">../../.devel_home:/home/${USER}</span>
+      <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">${BLOBSTORE_ROOT}:/blobstore</span>
       <span class="p p-Indicator">-</span> <span class="l l-Scalar l-Scalar-Plain">../..:/workspace/tractor</span>
     <span class="nt">working_dir</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">/workspace/tractor</span>
     <span class="nt">network_mode</span><span class="p">:</span> <span class="l l-Scalar l-Scalar-Plain">host</span>
-
-<span class="nt">volumes</span><span class="p">:</span>
-  <span class="nt">home</span><span class="p">:</span>
 </pre></div>
 </div>
 <ul class="simple">
@@ -413,6 +411,21 @@ You can open up a shell inside the container:
 <li><p>A named volume is mounted at <code class="docutils literal notranslate"><span class="pre">/home/$USERNAME</span></code> – this allows the container to persist bash history and other cached variables.</p></li>
 <li><p>A host directory is mounted as the <code class="docutils literal notranslate"><span class="pre">BLOBSTORE_ROOT</span></code> for <a class="reference internal" href="core_module.html#section-core-blobstore"><span class="std std-ref">persistent storage of application data</span></a>.</p></li>
 </ul>
+<p>To start the development environment with a custom BLOBSTORE_ROOT:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">BLOBSTORE_ROOT</span><span class="o">=/</span><span class="n">some</span><span class="o">/</span><span class="n">other</span><span class="o">/</span><span class="n">blobstore</span><span class="o">/</span><span class="n">root</span> <span class="o">-</span><span class="n">C</span> <span class="n">docker</span><span class="o">/</span><span class="n">devel</span> <span class="n">upd</span>
+</pre></div>
+</div>
+<p>To start the development environment with a custom devel docker image:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">make</span> <span class="n">FARM_NG_DEVEL_IMAGE</span><span class="o">=</span><span class="n">farmng</span><span class="o">/</span><span class="n">devel</span><span class="p">:</span><span class="n">latest</span> <span class="o">-</span><span class="n">C</span> <span class="n">docker</span><span class="o">/</span><span class="n">devel</span> <span class="n">upd</span>
+</pre></div>
+</div>
+<p>To build a the devel image locally:</p>
+<blockquote>
+<div><p>cd docker/devel
+./build_devel.sh # this will result in farmng/devel:latest
+make FARM_NG_DEVEL_IMAGE=farmng/devel:latest down
+make FARM_NG_DEVEL_IMAGE=farmng/devel:latest upd</p>
+</div></blockquote>
 </div>
 <div class="section" id="visual-studio-code-setup">
 <h3>Visual Studio Code setup<a class="headerlink" href="#visual-studio-code-setup" title="Permalink to this headline">¶</a></h3>
@@ -472,6 +485,25 @@ make webservices
 <p class="admonition-title">Note</p>
 <p>We’ll transition all the build steps to <code class="docutils literal notranslate"><span class="pre">cmake</span></code> eventually…</p>
 </div>
+</div>
+</div>
+<div class="section" id="git-workflow">
+<h2>Git workflow<a class="headerlink" href="#git-workflow" title="Permalink to this headline">¶</a></h2>
+<p>Please install pre-commit for static linting on your host machine.  We don’t yet support git commiting from the development environment.</p>
+<dl class="simple">
+<dt>Install the following:</dt><dd><ul class="simple">
+<li><p>pre-commit -  <a class="reference external" href="https://pre-commit.com/#install">https://pre-commit.com/#install</a></p></li>
+<li><p>buf for protobuf linting - <a class="reference external" href="https://docs.buf.build/installation/">https://docs.buf.build/installation/</a></p></li>
+</ul>
+</dd>
+</dl>
+<p>To have pre-commit run on every commit, run the following at the root of the repository:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pre</span><span class="o">-</span><span class="n">commit</span> <span class="n">install</span>
+</pre></div>
+</div>
+<p>If you don’t want it part of your git pre-commit check, you can run this via the devel image via:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">devel</span><span class="o">.</span><span class="n">sh</span> <span class="n">pre</span><span class="o">-</span><span class="n">commit</span> <span class="n">run</span> <span class="o">--</span><span class="nb">all</span><span class="o">-</span><span class="n">files</span>
+</pre></div>
 </div>
 </div>
 <div class="section" id="tutorials">
