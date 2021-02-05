@@ -13,15 +13,21 @@
 
 namespace farm_ng {
 namespace core {
+namespace fs = boost::filesystem;
 
-boost::filesystem::path GetBlobstoreRoot();
-boost::filesystem::path GetBucketRelativePath(Bucket id);
-boost::filesystem::path GetBucketAbsolutePath(Bucket id);
+fs::path GetBlobstoreRoot();
+fs::path GetBucketRelativePath(Bucket id);
+fs::path GetBucketAbsolutePath(Bucket id);
 
-void WriteProtobufToJsonFile(const boost::filesystem::path& path,
+fs::path NativePathFromResourcePath(const farm_ng::core::Resource& resource);
+// Returns a bucket-relative path guaranteed to be unique, with a parent
+// directory created if necessary.
+fs::path MakePathUnique(fs::path root, fs::path path);
+
+void WriteProtobufToJsonFile(const fs::path& path,
                              const google::protobuf::Message& proto);
 
-void WriteProtobufToBinaryFile(const boost::filesystem::path& path,
+void WriteProtobufToBinaryFile(const fs::path& path,
                                const google::protobuf::Message& proto);
 
 template <typename ProtobufT>
@@ -42,10 +48,6 @@ const std::string& ContentTypeProtobufJson() {
   return content_type;
 }
 
-// Returns a bucket-relative path guaranteed to be unique, with a parent
-// directory created if necessary.
-boost::filesystem::path MakePathUnique(boost::filesystem::path root,
-                                       boost::filesystem::path path);
 template <typename ProtobufT>
 farm_ng::core::Resource WriteProtobufAsJsonResource(Bucket id,
                                                     const std::string& path,
@@ -53,11 +55,10 @@ farm_ng::core::Resource WriteProtobufAsJsonResource(Bucket id,
   farm_ng::core::Resource resource;
   resource.set_content_type(ContentTypeProtobufJson<ProtobufT>());
 
-  boost::filesystem::path write_path =
-      MakePathUnique(GetBucketAbsolutePath(id), path);
+  fs::path write_path = MakePathUnique(GetBucketAbsolutePath(id), path);
   write_path += ".json";
   resource.set_path((GetBucketRelativePath(id) / write_path).string());
-  WriteProtobufToJsonFile(GetBucketAbsolutePath(id) / write_path, message);
+  WriteProtobufToJsonFile(NativePathFromResourcePath(resource), message);
   return resource;
 }
 
@@ -67,16 +68,15 @@ farm_ng::core::Resource WriteProtobufAsBinaryResource(
   farm_ng::core::Resource resource;
   resource.set_content_type(ContentTypeProtobufBinary<ProtobufT>());
 
-  boost::filesystem::path write_path =
-      MakePathUnique(GetBucketAbsolutePath(id), path);
+  fs::path write_path = MakePathUnique(GetBucketAbsolutePath(id), path);
   write_path += ".pb";
   resource.set_path((GetBucketRelativePath(id) / write_path).string());
-  WriteProtobufToBinaryFile(GetBucketAbsolutePath(id) / write_path, message);
+  WriteProtobufToBinaryFile(NativePathFromResourcePath(resource), message);
   return resource;
 }
 
 template <typename ProtobufT>
-ProtobufT ReadProtobufFromJsonFile(const boost::filesystem::path& path) {
+ProtobufT ReadProtobufFromJsonFile(const fs::path& path) {
   LOG(INFO) << "Loading (json proto): " << path.string();
   std::ifstream json_in(path.string());
   CHECK(json_in) << "Could not open path: " << path.string();
@@ -95,7 +95,7 @@ ProtobufT ReadProtobufFromJsonFile(const boost::filesystem::path& path) {
 }
 
 template <typename ProtobufT>
-ProtobufT ReadProtobufFromBinaryFile(const boost::filesystem::path& path) {
+ProtobufT ReadProtobufFromBinaryFile(const fs::path& path) {
   LOG(INFO) << "Loading (binary proto) : " << path.string();
   std::ifstream bin_in(path.string(), std::ifstream::binary);
   CHECK(bin_in) << "Could not open path: " << path.string();
@@ -111,10 +111,9 @@ ProtobufT ReadProtobufFromBinaryFile(const boost::filesystem::path& path) {
 
 template <typename ProtobufT>
 ProtobufT ReadProtobufFromResource(const farm_ng::core::Resource& resource) {
-  boost::filesystem::path resource_path(resource.path());
-  if (!boost::filesystem::exists(resource_path)) {
-    resource_path = GetBlobstoreRoot() / resource_path;
-  }
+  CHECK_EQ(resource.payload_case(),
+           farm_ng::core::Resource::PayloadCase::kPath);
+  fs::path resource_path(NativePathFromResourcePath(resource));
   if (ContentTypeProtobufJson<ProtobufT>() == resource.content_type()) {
     return ReadProtobufFromJsonFile<ProtobufT>(resource_path);
   }

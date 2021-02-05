@@ -41,7 +41,7 @@ EventLogReader::EventLogReader(std::string log_path)
 
 EventLogReader::EventLogReader(farm_ng::core::Resource resource)
     : impl_(new EventLogReaderImpl(
-          (GetBlobstoreRoot() / resource.path()).string())) {}
+          NativePathFromResourcePath(resource).string())) {}
 
 EventLogReader::~EventLogReader() { impl_.reset(nullptr); }
 

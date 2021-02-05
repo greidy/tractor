@@ -289,11 +289,17 @@ std::vector<MultiViewApriltagDetections> LoadMultiViewApriltagDetections(
     const CalibrateMultiViewApriltagRigConfiguration& config) {
   EventLogReader log_reader(event_log);
 
+  std::set<std::string> allowed_cameras;
+
+  for (auto camera_name : config.include_cameras()) {
+    allowed_cameras.insert(camera_name);
+    LOG(INFO) << "allowed camera: " << camera_name;
+  }
   std::unordered_set<int> allowed_ids;
 
   for (auto id : config.tag_ids()) {
     allowed_ids.insert(id);
-    LOG(INFO) << "allowed: " << id;
+    LOG(INFO) << "allowed tag id: " << id;
   }
 
   CHECK(allowed_ids.count(config.root_tag_id()) == 1)
@@ -310,6 +316,13 @@ std::vector<MultiViewApriltagDetections> LoadMultiViewApriltagDetections(
     }
     ApriltagDetections unfiltered_detections;
     if (event.data().UnpackTo(&unfiltered_detections)) {
+      auto camera_name =
+          unfiltered_detections.image().camera_model().frame_name();
+      CHECK(!camera_name.empty()) << " camera_name is not set.";
+      if (!allowed_cameras.empty() && !allowed_cameras.count(camera_name)) {
+        LOG(INFO) << "skipping data from camera: " << camera_name;
+        continue;
+      }
       ApriltagDetections detections = unfiltered_detections;
       detections.clear_detections();
       for (const auto& detection : unfiltered_detections.detections()) {
@@ -339,12 +352,16 @@ std::vector<MultiViewApriltagDetections> LoadMultiViewApriltagDetections(
       google::protobuf::util::TimeUtil::MillisecondsToDuration(1000.0 / 2);
 
   std::map<std::string, int> detection_counts;
-
+  int steady_count = 5;
+  if (config.has_steady_count()) {
+    steady_count = config.steady_count().value();
+  }
+  LOG(INFO) << "Steady count is: " << steady_count;
   for (const Event& event : apriltag_series[root_camera_name + "/apriltags"]) {
     ApriltagDetections detections;
     CHECK(event.data().UnpackTo(&detections));
     if (!config.filter_stable_tags() ||
-        tag_filter.AddApriltags(detections, 5, 7)) {
+        tag_filter.AddApriltags(detections, steady_count, 7)) {
       MultiViewApriltagDetections mv_detections;
       for (auto name_series : apriltag_series) {
         auto nearest_event =
@@ -514,12 +531,24 @@ void CameraRigFromMultiViewDetections(std::string camera_rig_name,
 
 MultiViewApriltagRigModel InitialMultiViewApriltagModelFromConfig(
     const CalibrateMultiViewApriltagRigConfiguration& config) {
-  auto dataset_result = ReadProtobufFromResource<CaptureVideoDatasetResult>(
-      config.video_dataset());
+  core::Resource event_log;
+  switch (config.input_case()) {
+    case CalibrateMultiViewApriltagRigConfiguration::InputCase::kVideoDataset: {
+      auto dataset_result = ReadProtobufFromResource<CaptureVideoDatasetResult>(
+          config.video_dataset());
+      event_log = dataset_result.dataset();
+      break;
+    }
+    case CalibrateMultiViewApriltagRigConfiguration::InputCase::kEventLog: {
+      event_log = config.event_log();
+      break;
+    }
+    default:
+      LOG(FATAL) << "No input provided in config.";
+  }
   MultiViewApriltagRigModel model;
-
   for (const auto& mv_detections : LoadMultiViewApriltagDetections(
-           config.root_camera_name(), dataset_result.dataset(), config)) {
+           config.root_camera_name(), event_log, config)) {
     model.add_multi_view_detections()->CopyFrom(mv_detections);
   }
   auto tag_rig = TagRigFromMultiViewDetections(config.tag_rig_name(),
@@ -528,8 +557,6 @@ MultiViewApriltagRigModel InitialMultiViewApriltagModelFromConfig(
                                    tag_rig, &model);
 
   model.set_solver_status(SolverStatus::SOLVER_STATUS_INITIAL);
-  ModelError(&model);
-
   return model;
 }
 
@@ -630,8 +657,6 @@ MultiViewApriltagRigModel SolveMultiViewApriltagModel(
     model.set_solver_status(SolverStatus::SOLVER_STATUS_FAILED);
   }
   UpdateModelFromPoseGraph(pose_graph, &model);
-
-  // ModelError(&model);
   return model;
 }
 
