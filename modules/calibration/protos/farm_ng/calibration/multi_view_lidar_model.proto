@@ -1,0 +1,5 @@
+package farm_ng.calibration;
+option go_package = "github.com/farm-ng/genproto/calibration";
+
+message MultiViewLidarModel {
+}

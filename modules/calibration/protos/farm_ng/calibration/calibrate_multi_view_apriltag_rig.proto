@@ -13,7 +13,7 @@ message CalibrateMultiViewApriltagRigConfiguration {
   oneof input {
     // Serialized CaptureVideoDatasetResult
     farm_ng.core.Resource video_dataset = 1;
-    // If event_log is poluated, looks for ApriltagDetections with event name
+    // If event_log is populated, looks for ApriltagDetections with event name
     // <camera_nam>/apriltags.
     farm_ng.core.Resource event_log = 10;
   }
