@@ -19,16 +19,11 @@ fs::path GetBlobstoreRoot();
 fs::path GetBucketRelativePath(Bucket id);
 fs::path GetBucketAbsolutePath(Bucket id);
 
-fs::path NativePathFromResourcePath(const farm_ng::core::Resource& resource);
+fs::path NativePathFromResourcePath(const Resource& resource);
+
 // Returns a bucket-relative path guaranteed to be unique, with a parent
 // directory created if necessary.
 fs::path MakePathUnique(fs::path root, fs::path path);
-
-void WriteProtobufToJsonFile(const fs::path& path,
-                             const google::protobuf::Message& proto);
-
-void WriteProtobufToBinaryFile(const fs::path& path,
-                               const google::protobuf::Message& proto);
 
 template <typename ProtobufT>
 const std::string& ContentTypeProtobufBinary() {
@@ -49,14 +44,39 @@ const std::string& ContentTypeProtobufJson() {
 }
 
 template <typename ProtobufT>
+Resource ProtobufJsonResource(const fs::path& path) {
+  Resource resource;
+  resource.set_path(path.string());
+  resource.set_content_type(ContentTypeProtobufJson<ProtobufT>());
+  return resource;
+}
+
+template <typename ProtobufT>
+Resource ProtobufBinaryResource(const fs::path& path) {
+  Resource resource;
+  resource.set_path(path.string());
+  resource.set_content_type(ContentTypeProtobufBinary<ProtobufT>());
+  return resource;
+}
+
+// Construct a Resource pointing to an event log on disk.
+Resource EventLogResource(const fs::path& path);
+
+void WriteProtobufToJsonFile(const fs::path& path,
+                             const google::protobuf::Message& proto);
+
+void WriteProtobufToBinaryFile(const fs::path& path,
+                               const google::protobuf::Message& proto);
+
+template <typename ProtobufT>
 farm_ng::core::Resource WriteProtobufAsJsonResource(Bucket id,
                                                     const std::string& path,
                                                     const ProtobufT& message) {
   farm_ng::core::Resource resource;
   resource.set_content_type(ContentTypeProtobufJson<ProtobufT>());
 
-  fs::path write_path = MakePathUnique(GetBucketAbsolutePath(id), path);
-  write_path += ".json";
+  fs::path write_path =
+      MakePathUnique(GetBucketAbsolutePath(id), path + ".json");
   resource.set_path((GetBucketRelativePath(id) / write_path).string());
   WriteProtobufToJsonFile(NativePathFromResourcePath(resource), message);
   return resource;
@@ -68,8 +88,7 @@ farm_ng::core::Resource WriteProtobufAsBinaryResource(
   farm_ng::core::Resource resource;
   resource.set_content_type(ContentTypeProtobufBinary<ProtobufT>());
 
-  fs::path write_path = MakePathUnique(GetBucketAbsolutePath(id), path);
-  write_path += ".pb";
+  fs::path write_path = MakePathUnique(GetBucketAbsolutePath(id), path + ".pb");
   resource.set_path((GetBucketRelativePath(id) / write_path).string());
   WriteProtobufToBinaryFile(NativePathFromResourcePath(resource), message);
   return resource;

@@ -119,7 +119,8 @@ class CalibrateMultiViewApriltagRigProgram {
 
     MultiViewApriltagRigModel initial_model_pb =
         InitialMultiViewApriltagModelFromConfig(configuration_);
-    ModelError(&initial_model_pb);
+    ModelError(&initial_model_pb,
+               !configuration_.disable_reprojection_images());
     LOG(INFO) << "Initial model computed.";
 
     result.mutable_multi_view_apriltag_rig_initial()->CopyFrom(
@@ -133,7 +134,7 @@ class CalibrateMultiViewApriltagRigProgram {
 
     MultiViewApriltagRigModel final_model_pb =
         SolveMultiViewApriltagModel(initial_model_pb);
-    ModelError(&final_model_pb);
+    ModelError(&final_model_pb, !configuration_.disable_reprojection_images());
     result.mutable_multi_view_apriltag_rig_solved()->CopyFrom(
         ArchiveProtobufAsBinaryResource("solved", final_model_pb));
     result.set_rmse(final_model_pb.rmse());

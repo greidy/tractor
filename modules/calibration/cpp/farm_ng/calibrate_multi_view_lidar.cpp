@@ -7,7 +7,9 @@
 #include <glog/logging.h>
 #include <boost/asio.hpp>
 
+#include "farm_ng/calibration/calibrate_multi_view_apriltag_rig.pb.h"
 #include "farm_ng/calibration/calibrate_multi_view_lidar.pb.h"
+
 #include "farm_ng/core/blobstore.h"
 #include "farm_ng/core/init.h"
 #include "farm_ng/core/ipc.h"
@@ -15,6 +17,13 @@
 DEFINE_bool(interactive, false, "receive program args via eventbus");
 DEFINE_string(output_config, "", "Output the config to a file.");
 DEFINE_string(config, "", "Load config from a file rather than args.");
+
+DEFINE_string(name, "", "Name of calibration output.");
+DEFINE_string(event_log, "", "Path to event log containing input data.");
+DEFINE_string(
+    calibrate_multi_view_apriltag_rig_result, "",
+    "Path to result of calibrate_multi_view_apriltag_rig, containing camera "
+    "rig and apriltag rig to calibrate the LIDARs with respect to.");
 
 namespace fs = boost::filesystem;
 
@@ -99,7 +108,7 @@ class CalibrateMultiViewLidarProgram {
 
 }  // namespace farm_ng::calibration
 
-void Cleanup(farm_ng::core::EventBus& bus) { LOG(INFO) << "Cleanup."; }
+void Cleanup(farm_ng::core::EventBus& bus) {}
 
 int Main(farm_ng::core::EventBus& bus) {
   farm_ng::calibration::CalibrateMultiViewLidarConfiguration config;
@@ -110,6 +119,14 @@ int Main(farm_ng::core::EventBus& bus) {
     farm_ng::calibration::CalibrateMultiViewLidarProgram program(
         bus, config, FLAGS_interactive);
     return program.run();
+  } else {
+    config.set_name(FLAGS_name);
+    config.mutable_event_log()->CopyFrom(
+        farm_ng::core::EventLogResource(FLAGS_event_log));
+    config.mutable_calibrate_multi_view_apriltag_rig_result()->CopyFrom(
+        farm_ng::core::ProtobufJsonResource<
+            farm_ng::calibration::CalibrateMultiViewApriltagRigResult>(
+            FLAGS_calibrate_multi_view_apriltag_rig_result));
   }
   if (!FLAGS_output_config.empty()) {
     farm_ng::core::WriteProtobufToJsonFile(FLAGS_output_config, config);

@@ -27,7 +27,7 @@ message CalibrateMultiViewLidarConfiguration {
   // type: CalibrateMultiViewApriltagRigResult
   // The solver uses the apriltag rig and camera rig, and will estimate the pose
   // of the LIDARs with respect to the camera_rig.
-  farm_ng.core.Resource multi_view_apriltag_rig_result = 2;
+  farm_ng.core.Resource calibrate_multi_view_apriltag_rig_result = 2;
 
   // name of the result.
   string name = 3;

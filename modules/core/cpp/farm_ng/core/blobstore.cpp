@@ -34,6 +34,13 @@ fs::path NativePathFromResourcePath(const farm_ng::core::Resource& resource) {
   return (GetBlobstoreRoot() / resource_path);
 }
 
+Resource EventLogResource(const fs::path& path) {
+  Resource resource;
+  resource.set_path(path.string());
+  resource.set_content_type("application/farm_ng.eventlog.v1");
+  return resource;
+}
+
 void WriteProtobufToJsonFile(const fs::path& path,
                              const google::protobuf::Message& proto) {
   google::protobuf::util::JsonPrintOptions print_options;
@@ -60,7 +67,8 @@ fs::path MakePathUnique(fs::path root, fs::path path) {
   fs::path out_path = path;
   int suffix = 1;
   while (fs::exists(root / out_path)) {
-    out_path = fs::path(out_path.string() + std::to_string(suffix));
+    out_path = fs::path(fs::basename(path) + "." + std::to_string(suffix) +
+                        fs::extension(path));
     suffix++;
   }
 
