@@ -115,7 +115,7 @@ class CalibrateMultiViewApriltagRigProgram {
         return -1;
     }
     // Output under the same directory as the dataset.
-    SetArchivePath((output_dir / "multiview_apriltag_rig_model").string());
+    SetArchivePath((output_dir / "multi_view_apriltag_rig_model").string());
 
     MultiViewApriltagRigModel initial_model_pb =
         InitialMultiViewApriltagModelFromConfig(configuration_);

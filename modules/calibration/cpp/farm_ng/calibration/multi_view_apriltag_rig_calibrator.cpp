@@ -739,7 +739,7 @@ EstimateMultiViewCameraRigPoseApriltagRig(
   double depth_weight = 100.0;
   ceres::Problem problem;
   for (PoseEdge* pose_edge : pose_graph.MutablePoseEdges()) {
-    LOG(INFO) << *pose_edge;
+    VLOG(2) << *pose_edge;
     problem.AddParameterBlock(pose_edge->GetAPoseB().data(),
                               SE3d::num_parameters,
                               new LocalParameterizationSE3);
@@ -812,10 +812,10 @@ EstimateMultiViewCameraRigPoseApriltagRig(
 
   // Solve
   ceres::Solver::Summary summary;
-  options.logging_type = ceres::PER_MINIMIZER_ITERATION;
-  options.minimizer_progress_to_stdout = true;
+  // options.logging_type = ceres::PER_MINIMIZER_ITERATION;
+  // options.minimizer_progress_to_stdout = true;
   ceres::Solve(options, &problem, &summary);
-  LOG(INFO) << summary.FullReport() << std::endl;
+  VLOG(2) << summary.FullReport() << std::endl;
   if (!summary.IsSolutionUsable()) {
     return std::nullopt;
   }
