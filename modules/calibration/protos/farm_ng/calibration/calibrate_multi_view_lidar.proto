@@ -31,6 +31,9 @@ message CalibrateMultiViewLidarConfiguration {
 
   // name of the result.
   string name = 3;
+
+  // An inclusive list of LIDAR topics to calibrate.
+  repeated string include_lidars = 4;
 }
 
 message CalibrateMultiViewLidarStatus {

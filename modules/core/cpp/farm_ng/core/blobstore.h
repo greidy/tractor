@@ -115,7 +115,7 @@ ProtobufT ReadProtobufFromJsonFile(const fs::path& path) {
 
 template <typename ProtobufT>
 ProtobufT ReadProtobufFromBinaryFile(const fs::path& path) {
-  LOG(INFO) << "Loading (binary proto) : " << path.string();
+  VLOG(2) << "Loading (binary proto) : " << path.string();
   std::ifstream bin_in(path.string(), std::ifstream::binary);
   CHECK(bin_in) << "Could not open path: " << path.string();
   std::string bin_str((std::istreambuf_iterator<char>(bin_in)),

@@ -30,6 +30,13 @@ class EventLogReaderImpl {
     }
     farm_ng::core::Event event;
     event.ParseFromString(ss);
+
+    core::Resource resource;
+    if (event.data().UnpackTo(&resource)) {
+      if (resource.content_type() == ContentTypeProtobufBinary<Event>()) {
+        event = ReadProtobufFromResource<core::Event>(resource);
+      }
+    }
     return event;
   }
   std::string log_path_;
