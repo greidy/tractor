@@ -4,6 +4,7 @@ import "farm_ng/perception/apriltag.proto";
 import "farm_ng/perception/point_cloud.proto";
 import "farm_ng/perception/camera_model.proto";
 import "farm_ng/perception/geometry.proto";
+import "farm_ng/calibration/calibrator.proto";
 
 package farm_ng.calibration;
 option go_package = "github.com/farm-ng/genproto/calibration";
@@ -17,4 +18,7 @@ message MultiViewLidarModel {
   repeated Measurement measurements = 1;
   farm_ng.perception.MultiViewCameraRig camera_rig = 2;
   farm_ng.perception.ApriltagRig apriltag_rig = 3;
+  repeated farm_ng.perception.NamedSE3Pose lidar_poses = 4;
+  repeated ApriltagRigTagStats tag_stats = 5;
+  double rmse = 6;
 }

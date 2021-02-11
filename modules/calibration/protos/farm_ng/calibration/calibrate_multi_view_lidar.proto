@@ -4,6 +4,7 @@ import "google/protobuf/timestamp.proto";
 
 import "farm_ng/core/resource.proto";
 import "farm_ng/calibration/calibrator.proto";
+import "farm_ng/perception/geometry.proto";
 
 package farm_ng.calibration;
 option go_package = "github.com/farm-ng/genproto/calibration";
@@ -34,6 +35,9 @@ message CalibrateMultiViewLidarConfiguration {
 
   // An inclusive list of LIDAR topics to calibrate.
   repeated string include_lidars = 4;
+
+  // Initial values for lidar poses, attached to some frame in the camera_rig.
+  repeated farm_ng.perception.NamedSE3Pose lidar_poses = 5;
 }
 
 message CalibrateMultiViewLidarStatus {

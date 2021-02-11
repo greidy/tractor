@@ -47,7 +47,6 @@ namespace fs = boost::filesystem;
 namespace farm_ng::calibration {
 
 void SavePly(std::string ply_path, const Eigen::MatrixXd& points) {
-  LOG(INFO) << ply_path << " npoints: " << points.cols();
   std::ofstream out(ply_path);
   out << "ply\n";
   out << "format ascii 1.0\n";
@@ -185,6 +184,63 @@ std::vector<std::tuple<int, int, double>> SphericalCoordinateNearestNeighbors(
   return neighbors;
 }
 
+// Finds point indices within +- x, +- y, +- z
+std::tuple<std::vector<int>, Eigen::Vector3d> AxisAlignedBoxFilter(const Eigen::Matrix3Xd& points, double x,
+                                      double y, double z) {
+  std::vector<int> indices;
+  Eigen::Vector3d m(0,0,0);
+  for (int i = 0; i < points.cols(); ++i) {
+    auto p_i = points.col(i);
+    if (p_i.x() > -x && p_i.x() < x &&  // x
+        p_i.y() > -y && p_i.y() < y &&  // y
+        p_i.z() > -z && p_i.z() < z) {
+       m += p_i.cwiseProduct(p_i);
+      indices.push_back(i);
+    }
+  }
+  if(indices.size() >0) {
+    m = (m/indices.size()).array().sqrt();
+  }
+  return {indices, m};
+}
+
+std::vector<std::tuple<perception::ApriltagRig::Node, std::vector<int>, double>>
+ApriltagRigPointCloudMatch(const perception::ApriltagRig& rig,
+                           const Eigen::Matrix3Xd& points_rig,
+                           double tolerance) {
+
+  std::vector<std::tuple<perception::ApriltagRig::Node, std::vector<int>, double>>
+      node_indices;
+  for (auto node : rig.nodes()) {
+    Sophus::SE3d tag_pose_rig =
+        ProtoToSophus(node.pose(), node.frame_name(), rig.name());
+    Eigen::Matrix3Xd points_tag = TransformPoints(tag_pose_rig, points_rig);
+    // half the tag size + 1 pixel of border (note tag_size/8 is 1 apriltag
+    // pixel)
+    double half_tag = node.tag_size() / 8.0 + node.tag_size() / 2.0;
+
+    auto [indices, error] =
+        AxisAlignedBoxFilter(points_tag, half_tag, half_tag, tolerance);
+    if (indices.empty()) {
+      continue;
+    }
+
+    node_indices.push_back({node, indices, error.z()});
+  }
+  return node_indices;
+}
+
+Eigen::Matrix3Xd SelectPoints(const Eigen::MatrixXd& points,
+                              const std::vector<int>& indices) {
+  Eigen::Matrix3Xd out(3, indices.size());
+
+  for (int i = 0; i < out.cols(); ++i) {
+    CHECK_LT(indices[i], points.cols());
+    CHECK_GT(indices[i], 0);
+    out.col(i) = points.col(indices[i]);
+  }
+  return out;
+}
 std::vector<std::tuple<int, int, double>> BruteForceNeirestNeighbors(
     const Eigen::Matrix3Xd& points_a, const Eigen::Matrix3Xd& normals_a,
     const Eigen::Matrix3Xd& points_b, const double d_thresh) {
@@ -262,8 +318,8 @@ Eigen::Matrix<Scalar, 1, Eigen::Dynamic> MakeDepthMap(
   return depth_map;
 }
 
-struct PointPlaneCostFunctor {
-  PointPlaneCostFunctor(
+struct PointCloudPlaneCostFunctor {
+  PointCloudPlaneCostFunctor(
       const Eigen::Matrix3Xd& points_a, const Eigen::Matrix3Xd& normals_a,
       const Eigen::Matrix3Xd& points_b,
       const std::vector<std::tuple<int, int, double>>& matches)
@@ -302,6 +358,32 @@ struct PointPlaneCostFunctor {
   std::vector<std::tuple<int, int, double>> matches_;
 };
 
+struct PointPlaneCostFunctor {
+  PointPlaneCostFunctor(const Eigen::Vector3d& point_a,
+                        const Eigen::Vector3d& normal_a,
+                        const Eigen::Matrix3Xd& points_b,
+                        const perception::SE3Map& a_pose_b_map)
+      : point_a_(point_a),
+        normal_a_(normal_a),
+        points_b_(points_b),
+        a_pose_b_map_(a_pose_b_map) {}
+
+  template <class T>
+  bool operator()(T const* const raw_a_pose_b, T* raw_residuals) const {
+    Eigen::Map<Eigen::Matrix<T, 1, Eigen::Dynamic>> residuals(raw_residuals, 1,
+                                                              points_b_.cols());
+    auto a_pose_b = a_pose_b_map_.Map(raw_a_pose_b);
+    residuals = (normal_a_.cast<T>().transpose() *
+                 (TransformPoints<T>(a_pose_b, points_b_.cast<T>()).colwise() -
+                  point_a_.cast<T>()));
+    return true;
+  }
+  Eigen::Vector3d point_a_;
+  Eigen::Vector3d normal_a_;
+  Eigen::Matrix3Xd points_b_;
+  perception::SE3Map a_pose_b_map_;
+};
+
 std::tuple<Sophus::SE3d, double> EstimateMotion(
     const perception::PointCloud& cloud_a,
     const perception::PointCloud& cloud_b, Sophus::SE3d a_pose_b,
@@ -330,11 +412,10 @@ std::tuple<Sophus::SE3d, double> EstimateMotion(
   problem.AddParameterBlock(a_pose_b.data(), Sophus::SE3d::num_parameters,
                             new LocalParameterizationSE3);
 
-  ceres::CostFunction* cost_function1 =
-      new ceres::AutoDiffCostFunction<PointPlaneCostFunctor, ceres::DYNAMIC,
-                                      Sophus::SE3d::num_parameters>(
-          new PointPlaneCostFunctor(points_a, normals_a, points_b, matches),
-          matches.size());
+  ceres::CostFunction* cost_function1 = new ceres::AutoDiffCostFunction<
+      PointCloudPlaneCostFunctor, ceres::DYNAMIC, Sophus::SE3d::num_parameters>(
+      new PointCloudPlaneCostFunctor(points_a, normals_a, points_b, matches),
+      matches.size());
   problem.AddResidualBlock(cost_function1, new ceres::CauchyLoss(d_thresh),
                            a_pose_b.data());
 
@@ -354,6 +435,228 @@ std::tuple<Sophus::SE3d, double> EstimateMotion(
   // LOG(INFO) << summary.FullReport() << std::endl;
 
   return {a_pose_b, summary.final_cost};
+}
+
+MultiViewLidarModel HackInitialCad(MultiViewLidarModel model) {
+  Eigen::Matrix4d right_cad;
+  right_cad <<  // initializer list
+      0.342017940083864,
+      -0.175192752934261, 0.923217865934204, -0.00682305750428412,  // row1
+      -0.939692620785908, -0.062480906526118, 0.336264649881884,
+      -0.00915281044501381,  // row2
+      -0.00122764054260543, -0.982549558871709, -0.185996928092129,
+      0.210803579561015,  // row3
+      0.0, 0.0, 0.0, 1.0;
+
+  // left_lidar_pose_left_camera =
+  //   Sophus::SE3d::rotZ(-M_PI / 2) * left_lidar_pose_left_camera;
+
+  Eigen::Matrix4d left_cad;
+  left_cad <<  // initializer list
+      0.342017940083859,
+      0.175192752934267, -0.923217865934204,
+      0.00726017882119311,  // row0
+      0.93969262078591, -0.0624809065261251, 0.336264649881878,
+      -0.00915284599211702,  // row1
+      0.00122764054259999, -0.982549558871707, -0.185996928092137,
+      0.211046652781509,  // row2
+      0, 0, 0, 1;
+
+  Sophus::SE3d left_lidar_pose_right_camera =
+      Sophus::SE3d::rotZ(-M_PI / 2) * Sophus::SE3d(left_cad);
+  Sophus::SE3d right_lidar_pose_left_camera =
+      Sophus::SE3d::rotZ(-M_PI / 2) * Sophus::SE3d(right_cad);
+
+  perception::PoseGraph posegraph;
+
+  for (int i = 0; i < model.measurements_size() && i < 1; ++i) {
+    const auto& m_i0 = model.measurements(i);
+    CHECK_EQ(m_i0.camera_rig_pose_apriltag_rig().frame_a(), "flir_rig");
+    auto left_cloud = m_i0.multi_view_pointclouds().point_clouds_per_view(0);
+    auto right_cloud = m_i0.multi_view_pointclouds().point_clouds_per_view(1);
+    posegraph.AddPose(left_cloud.frame_name(), "right_fork_flir_camera",
+                      left_lidar_pose_right_camera);
+    posegraph.AddPose(right_cloud.frame_name(), "left_fork_flir_camera",
+                      right_lidar_pose_left_camera);
+  }
+  model.clear_measurements();
+  model.mutable_lidar_poses()->CopyFrom(posegraph.ToNamedSE3Poses());
+  farm_ng::core::WriteProtobufToJsonFile("/blobstore/scratch/model.json",
+                                         model);
+  return model;
+}
+void SavePlyFilesInTagRig(MultiViewLidarModel model, std::string prefix) {
+  perception::PoseGraph posegraph;
+  posegraph.AddPoses(model.camera_rig().camera_pose_rig());
+  posegraph.AddPoses(model.lidar_poses());
+  posegraph = posegraph.AveragePoseGraph(model.camera_rig().name());
+  std::ofstream report_csv(prefix +"_report.csv");
+  report_csv  << "# frame_number, point_coud, tag_id, error";
+  for (int i = 0; i < model.measurements_size(); ++i) {
+    const auto& m_i0 = model.measurements(i);
+    Sophus::SE3d camera_rig_pose_apriltag_rig =
+        ProtoToSophus(m_i0.camera_rig_pose_apriltag_rig(),
+                      model.camera_rig().name(), model.apriltag_rig().name());
+    for (const auto& cloud :
+         m_i0.multi_view_pointclouds().point_clouds_per_view()) {
+      Sophus::SE3d cloud_pose_camera_rig = posegraph.CheckAverageAPoseB(
+          cloud.frame_name(), model.camera_rig().name());
+      Sophus::SE3d cloud_pose_apriltag_rig =
+          cloud_pose_camera_rig * camera_rig_pose_apriltag_rig;
+      auto points_cloud = PointCloudGetData(cloud, "xyz");
+      auto points_apriltag_rig = TransformPoints<double>(
+          cloud_pose_apriltag_rig.inverse(), points_cloud);
+      SavePly(prefix + cloud.frame_name() + std::to_string(i) +
+                  ".ply",
+              points_apriltag_rig);
+      auto apriltag_rig_matches = ApriltagRigPointCloudMatch(
+          model.apriltag_rig(), points_apriltag_rig, 0.1);
+      for (auto [node, indices, error] : apriltag_rig_matches) {
+        LOG(INFO) << node.frame_name() << "<->" << cloud.frame_name()
+                  << "  matches: " << indices.size() << " error: " << error;
+        report_csv  << i << ", "  << cloud.frame_name() <<  "," <<  node.id() << ", " << error << std::endl;
+        SavePly(prefix + std::to_string(node.id()) +
+                    cloud.frame_name() + std::to_string(i) + ".ply",
+                SelectPoints(points_apriltag_rig, indices));
+      }
+    }
+    }
+}
+
+MultiViewLidarModel Solve(MultiViewLidarModel model) {
+  perception::PoseGraph posegraph;
+  posegraph.AddPoses(model.camera_rig().camera_pose_rig());
+  posegraph.AddPoses(model.lidar_poses());
+  posegraph = posegraph.AveragePoseGraph(model.camera_rig().name());
+  ceres::Problem problem;
+
+  for (auto pose : posegraph.MutablePoseEdges()) {
+    problem.AddParameterBlock(pose->GetAPoseB().data(),
+                              Sophus::SE3d::num_parameters,
+                              new LocalParameterizationSE3);
+  }
+  for (auto camera_pose : model.camera_rig().camera_pose_rig()) {
+    problem.SetParameterBlockConstant(
+        posegraph.MutablePoseEdge(camera_pose.frame_a(), camera_pose.frame_b())
+            ->GetAPoseB()
+            .data());
+  }
+
+  std::map<int, ApriltagRigTagStats> tag_stats;
+  std::map<int, std::vector<std::tuple<PerImageRmse, ceres::ResidualBlockId, int>>>
+      tag_id_to_per_image_rmse_block_id;
+
+  for (int i = 0; i < model.measurements_size(); ++i) {
+    const auto& m_i0 = model.measurements(i);
+    Sophus::SE3d camera_rig_pose_apriltag_rig =
+        ProtoToSophus(m_i0.camera_rig_pose_apriltag_rig(),
+                      model.camera_rig().name(), model.apriltag_rig().name());
+    for (const auto& cloud :
+         m_i0.multi_view_pointclouds().point_clouds_per_view()) {
+      auto* cloud_rig_edge = posegraph.MutablePoseEdge(
+          cloud.frame_name(), model.camera_rig().name());
+      Sophus::SE3d cloud_pose_camera_rig = cloud_rig_edge->GetAPoseBMapped(
+          cloud.frame_name(), model.camera_rig().name());
+      Sophus::SE3d cloud_pose_apriltag_rig =
+          cloud_pose_camera_rig * camera_rig_pose_apriltag_rig;
+      auto points_cloud = PointCloudGetData(cloud, "xyz");
+      auto points_apriltag_rig = TransformPoints<double>(
+          cloud_pose_apriltag_rig.inverse(), points_cloud);
+      auto apriltag_rig_matches = ApriltagRigPointCloudMatch(
+          model.apriltag_rig(), points_apriltag_rig, 0.1);
+      for (auto [node, indices, error] : apriltag_rig_matches) {
+        LOG(INFO) << node.frame_name() << "<->" << cloud.frame_name()
+                  << "  matches: " << indices.size() << " error: " << error;
+        //        SavePly("/blobstore/scratch/tag_" + std::to_string(node.id())
+        //        +
+        //"_left_" + std::to_string(i) + ".ply",
+        // SelectPoints(points_rig, indices));
+        Sophus::SE3d apriltag_rig_pose_tag = ProtoToSophus(
+            node.pose(), model.apriltag_rig().name(), node.frame_name());
+        Sophus::SE3d camera_rig_pose_tag =
+            camera_rig_pose_apriltag_rig * apriltag_rig_pose_tag;
+        // tag normal
+        Eigen::Vector3d normal_camera_rig =
+            camera_rig_pose_tag.rotationMatrix().col(2);
+        Eigen::Vector3d point_camera_rig = camera_rig_pose_tag.translation();
+
+        auto tag_points_cloud = SelectPoints(points_cloud, indices);
+        ceres::CostFunction* cost_function1 =
+            new ceres::AutoDiffCostFunction<PointPlaneCostFunctor,
+                                            ceres::DYNAMIC,
+                                            Sophus::SE3d::num_parameters>(
+                new PointPlaneCostFunctor(
+                    point_camera_rig, normal_camera_rig, tag_points_cloud,
+                    cloud_rig_edge->GetAPoseBMap(model.camera_rig().name(),
+                                                 cloud.frame_name())),
+                tag_points_cloud.cols());
+        auto block_id = problem.AddResidualBlock(
+            cost_function1, new ceres::CauchyLoss(0.05),
+            cloud_rig_edge->GetAPoseB().data());
+
+      ApriltagRigTagStats& stats = tag_stats[node.id()];
+      stats.set_tag_id(node.id());
+      stats.set_n_frames(stats.n_frames() + 1);
+
+        PerImageRmse per_image_rmse;
+        per_image_rmse.set_frame_number(i);
+        per_image_rmse.set_camera_name(cloud.frame_name());
+
+        tag_id_to_per_image_rmse_block_id[node.id()].push_back(
+            std::make_tuple(per_image_rmse, block_id, tag_points_cloud.cols()));
+      }
+    }
+  }
+
+  // Set solver options (precision / method)
+  ceres::Solver::Options options;
+  options.linear_solver_type = ceres::DENSE_SCHUR;
+  options.gradient_tolerance = 1e-20;
+  options.function_tolerance = 1e-20;
+  options.parameter_tolerance = 1e-20;
+  options.max_num_iterations = 2000;
+
+  // Solve
+  ceres::Solver::Summary summary;
+  options.logging_type = ceres::PER_MINIMIZER_ITERATION;
+  options.minimizer_progress_to_stdout = false;
+  ceres::Solve(options, &problem, &summary);
+  LOG(INFO) << summary.FullReport() << std::endl;
+
+
+  double total_rmse = 0.0;
+  double total_count = 0;
+  std::vector<ApriltagRigTagStats> out_tag_stats;
+  model.clear_tag_stats();
+  for (auto it : tag_id_to_per_image_rmse_block_id) {
+    int tag_id = it.first;
+    auto& stats = tag_stats[tag_id];
+    for (auto per_image_rmse_block : it.second) {
+      auto [image_rmse, block, n_residuals] = per_image_rmse_block;
+      double cost;
+      Eigen::Matrix<double, 1, Eigen::Dynamic> residuals(1, n_residuals);
+      problem.EvaluateResidualBlockAssumingParametersUnchanged(
+          block, false, &cost, residuals.data(), nullptr);
+
+      double squared_mean = residuals.squaredNorm()/residuals.cols();
+
+      total_rmse += squared_mean;
+      total_count += 1;
+
+      stats.set_tag_rig_rmse(stats.tag_rig_rmse() + squared_mean);
+
+      image_rmse.set_rmse(std::sqrt(squared_mean));
+      stats.add_per_image_rmse()->CopyFrom(image_rmse);
+
+    }
+    stats.set_tag_rig_rmse(std::sqrt(stats.tag_rig_rmse() / stats.n_frames()));
+    model.add_tag_stats()->CopyFrom(stats);
+  }
+  double rmse = std::sqrt(total_rmse / total_count);
+  LOG(INFO) << "model rmse (meters): " << rmse << "\n";
+  model.set_rmse(rmse);
+  model.mutable_lidar_poses()->CopyFrom(posegraph.ToNamedSE3Poses());
+  return model;
 }
 
 void PointCloudToDepthMap(const perception::PointCloud& cloud_a,
@@ -478,19 +781,23 @@ class CalibrateMultiViewLidarProgram {
     LOG(INFO) << "config:\n" << configuration_.DebugString();
 
     CHECK(configuration_.has_event_log()) << "Please specify an event log.";
+
+    MultiViewLidarModel model;
+    model.mutable_lidar_poses()->CopyFrom(configuration_.lidar_poses());
+
     auto mv_rig_result = core::ReadProtobufFromResource<
         calibration::CalibrateMultiViewApriltagRigResult>(
         configuration_.calibrate_multi_view_apriltag_rig_result());
 
     LOG(INFO) << mv_rig_result.DebugString();
-
-    auto camera_rig =
+    model.mutable_camera_rig()->CopyFrom(
         core::ReadProtobufFromResource<perception::MultiViewCameraRig>(
-            mv_rig_result.camera_rig_solved());
-
-    auto apriltag_rig = core::ReadProtobufFromResource<perception::ApriltagRig>(
-        mv_rig_result.apriltag_rig_solved());
-
+            mv_rig_result.camera_rig_solved()));
+    const auto& camera_rig = model.camera_rig();
+    model.mutable_apriltag_rig()->CopyFrom(
+        core::ReadProtobufFromResource<perception::ApriltagRig>(
+            mv_rig_result.apriltag_rig_solved()));
+    const auto& apriltag_rig = model.apriltag_rig();
     std::map<std::string, perception::TimeSeries<core::Event>> event_series;
 
     std::set<std::string> lidar_names;
@@ -516,8 +823,6 @@ class CalibrateMultiViewLidarProgram {
       event_series[event.name()].insert(event);
     }
     CHECK_GT(lidar_names.size(), 0);
-
-    MultiViewLidarModel model;
 
     auto time_window =
         google::protobuf::util::TimeUtil::MillisecondsToDuration(200);
@@ -582,136 +887,10 @@ class CalibrateMultiViewLidarProgram {
       measurement.mutable_camera_rig_pose_apriltag_rig()->CopyFrom(pose);
       model.add_measurements()->CopyFrom(measurement);
     }
-    Eigen::Matrix4d right_cad;
-    right_cad <<  // initializer list
-        0.342017940083864,
-        -0.175192752934261, 0.923217865934204, -0.00682305750428412,  // row1
-        -0.939692620785908, -0.062480906526118, 0.336264649881884,
-        -0.00915281044501381,  // row2
-        -0.00122764054260543, -0.982549558871709, -0.185996928092129,
-        0.210803579561015,  // row3
-        0.0, 0.0, 0.0, 1.0;
+    SavePlyFilesInTagRig(model, "/blobstore/scratch/init_");
+    model = Solve(model);
+    SavePlyFilesInTagRig(model, "/blobstore/scratch/solved_");
 
-    // left_lidar_pose_left_camera =
-    //   Sophus::SE3d::rotZ(-M_PI / 2) * left_lidar_pose_left_camera;
-
-    Eigen::Matrix4d left_cad;
-    left_cad <<  // initializer list
-        0.342017940083859,
-        0.175192752934267, -0.923217865934204,
-        0.00726017882119311,  // row0
-        0.93969262078591, -0.0624809065261251, 0.336264649881878,
-        -0.00915284599211702,  // row1
-        0.00122764054259999, -0.982549558871707, -0.185996928092137,
-        0.211046652781509,  // row2
-        0, 0, 0, 1;
-
-    Sophus::SE3d left_lidar_pose_right_camera =
-        Sophus::SE3d::rotZ(-M_PI / 2) * Sophus::SE3d(left_cad);
-    Sophus::SE3d right_lidar_pose_left_camera =
-        Sophus::SE3d::rotZ(-M_PI / 2) * Sophus::SE3d(right_cad);
-
-    perception::PoseGraph posegraph;
-    posegraph.AddPoses(camera_rig.camera_pose_rig());
-
-    Sophus::SE3d left_camera_pose_camera_rig =
-        posegraph.CheckAverageAPoseB("left_fork_flir_camera", "flir_rig");
-
-    Sophus::SE3d right_camera_pose_camera_rig =
-        posegraph.CheckAverageAPoseB("right_fork_flir_camera", "flir_rig");
-
-    Sophus::SE3d left_lidar_pose_camera_rig =
-        left_lidar_pose_right_camera * right_camera_pose_camera_rig;
-
-    Sophus::SE3d right_lidar_pose_camera_rig =
-        right_lidar_pose_left_camera * left_camera_pose_camera_rig;
-
-    LOG(INFO) << "left_lidar_pose_right_lidar: "
-              << perception::SophusToProto(
-                     left_lidar_pose_camera_rig *
-                     right_lidar_pose_camera_rig.inverse())
-                     .ShortDebugString();
-
-    for (int i = 0; i < model.measurements_size(); ++i) {
-      const auto& m_i0 = model.measurements(i);
-      CHECK_EQ(m_i0.camera_rig_pose_apriltag_rig().frame_a(), "flir_rig");
-      LOG(INFO) << m_i0.camera_rig_pose_apriltag_rig().ShortDebugString();
-      auto left_lidar_pose_apriltag_rig =
-          left_lidar_pose_camera_rig *
-          ProtoToSophus(m_i0.camera_rig_pose_apriltag_rig().a_pose_b());
-
-      auto right_lidar_pose_apriltag_rig =
-          right_lidar_pose_camera_rig *
-          ProtoToSophus(m_i0.camera_rig_pose_apriltag_rig().a_pose_b());
-
-      auto left_cloud = m_i0.multi_view_pointclouds().point_clouds_per_view(0);
-      auto right_cloud = m_i0.multi_view_pointclouds().point_clouds_per_view(1);
-      SavePly("/blobstore/scratch/left_" + std::to_string(i) + ".ply",
-              TransformPoints<double>(left_lidar_pose_apriltag_rig.inverse(),
-                                      PointCloudGetData(left_cloud, "xyz")));
-      SavePly("/blobstore/scratch/right_" + std::to_string(i) + ".ply",
-              TransformPoints<double>(right_lidar_pose_apriltag_rig.inverse(),
-                                      PointCloudGetData(right_cloud, "xyz")));
-    }
-    for (int i = 0; false && i < model.measurements_size() - 1; ++i) {
-      const auto& m_i0 = model.measurements(i);
-      const auto& m_i1 = model.measurements(i + 1);
-      auto camera_rig0_pose_camera_rig1 =
-          Multiply(m_i0.camera_rig_pose_apriltag_rig(),
-                   Inverse(m_i1.camera_rig_pose_apriltag_rig()));
-
-      auto left_lidar0_pose_left_lidar1 =
-          left_lidar_pose_camera_rig *
-          ProtoToSophus(camera_rig0_pose_camera_rig1.a_pose_b()) *
-          left_lidar_pose_camera_rig.inverse();
-
-      auto right_lidar0_pose_right_lidar1 =
-          right_lidar_pose_camera_rig *
-          ProtoToSophus(camera_rig0_pose_camera_rig1.a_pose_b()) *
-          right_lidar_pose_camera_rig.inverse();
-
-      double distance_01 = left_lidar0_pose_left_lidar1.translation().norm();
-      LOG(INFO) << "distance: " << distance_01 << " "
-                << perception::SophusToProto(left_lidar0_pose_left_lidar1)
-                       .ShortDebugString();
-      CHECK_GT(m_i0.multi_view_pointclouds().point_clouds_per_view_size(), 0);
-      CHECK_GT(m_i1.multi_view_pointclouds().point_clouds_per_view_size(), 0);
-
-      auto left_cloud_i0 =
-          m_i0.multi_view_pointclouds().point_clouds_per_view(0);
-
-      auto left_cloud_i1 =
-          m_i1.multi_view_pointclouds().point_clouds_per_view(0);
-
-      auto right_cloud_i0 =
-          m_i0.multi_view_pointclouds().point_clouds_per_view(1);
-
-      auto right_cloud_i1 =
-          m_i1.multi_view_pointclouds().point_clouds_per_view(1);
-
-      CHECK_EQ(left_cloud_i0.frame_name(), "Left_honeycomb");
-      CHECK_EQ(left_cloud_i1.frame_name(), "Left_honeycomb");
-
-      CHECK_EQ(right_cloud_i0.frame_name(), "Right_honeycomb");
-      CHECK_EQ(right_cloud_i1.frame_name(), "Right_honeycomb");
-
-      // Sophus::SE3d i0_pose_i1;
-      auto [l_pose_j, l_error] = EstimateMotion(
-          left_cloud_i0, left_cloud_i1, left_lidar0_pose_left_lidar1, 0.1);
-      auto [r_pose_j, r_error] = EstimateMotion(
-          right_cloud_i0, right_cloud_i1, right_lidar0_pose_right_lidar1, 0.1);
-      LOG(INFO) << "i " << i << " l_error= " << l_error
-                << " l_error= " << r_error
-
-                << "\nl_delta:\n"
-                << perception::SophusToProto(l_pose_j.inverse() *
-                                             left_lidar0_pose_left_lidar1)
-                       .ShortDebugString()
-                << "\nr_delta:\n"
-                << perception::SophusToProto(r_pose_j.inverse() *
-                                             right_lidar0_pose_right_lidar1)
-                       .ShortDebugString();
-    }
     LOG(INFO) << "Measurements: " << model.measurements_size();
     CalibrateMultiViewLidarResult result;
 
