@@ -60,7 +60,7 @@ CreateVideoDatasetProgram::CreateVideoDatasetProgram(
 
     CameraModel m = farm_ng::core::ReadProtobufFromResource<CameraModel>(resource);
     intrinsic_map_[m.frame_name()] = m;
-  } 
+  }
 }
 
 int CreateVideoDatasetProgram::run() {
@@ -125,7 +125,7 @@ int CreateVideoDatasetProgram::run() {
       LOG(INFO)
           << configuration_.video_file_cameras(camera_id).camera_frame_name()
           << " Frame: " << image_pb.frame_number().value() << " msec: " << msec;
- 
+
 
       auto camera_name = configuration_.video_file_cameras(camera_id).camera_frame_name();
 
