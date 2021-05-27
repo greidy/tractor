@@ -52,13 +52,13 @@ CreateVideoDatasetProgram::CreateVideoDatasetProgram(
                                            this, std::placeholders::_1));
   on_timer(boost::system::error_code());
 
-  // initialize camera calibration db
-  for (const farm_ng::core::Resource &r : configuration_.group_intrinsic_calibration())
+  // initialize camera calibration map
+  for (const farm_ng::core::Resource &resource : configuration_.group_intrinsic_calibration())
   {
     // expand the resource into a CameraModel
     // store the camera model under the appropriate name
 
-    CameraModel m = farm_ng::core::ReadProtobufFromResource<CameraModel>(r);
+    CameraModel m = farm_ng::core::ReadProtobufFromResource<CameraModel>(resource);
     intrinsic_map_[m.frame_name()] = m;
   } 
 }

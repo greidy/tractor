@@ -18,26 +18,15 @@ void ImageLoader::OpenVideo(const Resource& resource) {
   CHECK_EQ(resource.content_type(), "video/mp4");
 
   if (!capture_) {
-    video_name_ = AbsolutePathToResource(resource.path());
+    video_name_ = farm_ng::core::NativePathFromResourcePath(resource).string();
     capture_.reset(new cv::VideoCapture(video_name_));
   } else {
-    if (video_name_ != AbsolutePathToResource(resource.path())) {
+    if (video_name_ != farm_ng::core::NativePathFromResourcePath(resource).string()) {
       capture_.reset(nullptr);
       OpenVideo(resource);
     }
   }
   CHECK(capture_->isOpened()) << "Video is not opened: " << video_name_;
-}
-
-std::string ImageLoader::AbsolutePathToResource(const std::string& relativePath) {
-  
-  if (relativePath.find(GetBlobstoreRoot().string()) == 0) {
-    // the given relative path is already absolute
-    return relativePath;
-  }
-  else {
-    return (GetBlobstoreRoot() / relativePath).string();
-  }
 }
 
 cv::Mat ImageLoader::LoadImage(const Image& image) {
@@ -56,12 +45,12 @@ cv::Mat ImageLoader::LoadImage(const Image& image) {
     CHECK_EQ(frame_number, uint32_t(capture_->get(cv::CAP_PROP_POS_FRAMES)));
     *capture_ >> frame;
   } else {
-    frame = cv::imread(AbsolutePathToResource(image.resource().path()),
+    frame = cv::imread(farm_ng::core::NativePathFromResourcePath(image.resource()).string(),
                        cv::IMREAD_UNCHANGED);
   }
   if (frame.empty()) {
     LOG(WARNING) << "Could not load image: "
-                 << AbsolutePathToResource(image.resource().path());
+                 << farm_ng::core::NativePathFromResourcePath(image.resource()).string();
     frame = cv::Mat::zeros(cv::Size(image.camera_model().image_width(),
                                     image.camera_model().image_height()),
                            CV_8UC3);
@@ -87,12 +76,12 @@ cv::Mat ImageLoader::LoadDepthmap(const Image& image) {
   }
   cv::Mat frame;
   frame = cv::imread(
-      AbsolutePathToResource(image.depthmap().resource().path()),
+      farm_ng::core::NativePathFromResourcePath(image.depthmap().resource()).string(),
       cv::IMREAD_UNCHANGED);
   if (frame.empty()) {
     LOG(FATAL)
         << "Could not load depthmap: "
-        << AbsolutePathToResource(image.depthmap().resource().path());
+        << farm_ng::core::NativePathFromResourcePath(image.depthmap().resource()).string();
   }
   CHECK(!frame.empty());
   if (frame.size().width != image.camera_model().image_width() ||
@@ -153,7 +142,7 @@ void ImageResourcePayloadToData(core::Resource* resource) {
         << resource->ShortDebugString();
     return;
   }
-  std::string bin_path = ImageLoader::AbsolutePathToResource(resource->path());
+  std::string bin_path = farm_ng::core::NativePathFromResourcePath(*resource).string();
 
   LOG(INFO) << "Reading " << bin_path;
 
